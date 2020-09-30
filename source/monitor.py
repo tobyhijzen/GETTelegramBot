@@ -53,7 +53,7 @@ GET_WETH_PAIR_CONTRACT = w3.eth.contract(address=get_weth_checksum_address, abi=
 
 # block = "latest"
 # block = 10955000
-block = 10947084
+block = 10954000
 
 myfilter = GET_WETH_PAIR_CONTRACT.events.Transfer.createFilter(fromBlock=block)
 
@@ -90,34 +90,103 @@ while True:
             tx_hash = transactions[i]['transactionHash']
             print('Transaction hash: 0x' + ''.join('{:02x}'.format(x) for x in tx_hash))
             receipt = w3.eth.getTransactionReceipt(tx_hash)
-            print('\n\n')
-            print(receipt)
-            print('\n\n')
             from_address = receipt['from']
             to_address = receipt['to']
-            print('from: ', from_address)
-            print('to:   ', to_address)
-            print('\n\n')
+
+            if to_address != '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D':
+                continue
 
             get_value = 0
             weth_value = 0
-            for i in range(0,len(receipt.logs)):
-                operation = ''.join('{:02x}'.format(x) for x in receipt.logs[i].topics[0])
-                if receipt.logs[i].address == '0x8a854288a5976036A725879164Ca3e91d30c6A1B' and \
-                    operation == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef':
-                    hexdata_string = receipt.logs[i].data[2:]
-                    data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
-                    get_value = data[3]*10.**-18 + data[2]*2**64*10**-18
-                if receipt.logs[i].address == '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' and \
-                    operation == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef':
-                    hexdata_string = receipt.logs[i].data[2:]
-                    data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
-                    weth_value = data[3]*10.**-18 + data[2]*2**64*10**-18
-                if weth_value != 0 and get_value != 0:
-                    msg_text = 'Added liquidity: ' + str(get_value) + ' GET | ' + str(weth_value) + ' ETH'
-                    bot.send_message(chat_id=-466074155, text=msg_text)
-                    time.sleep(1)
-                    break
+            
+            operations = []
+            addresses = []
+            for j in range(0,len(receipt.logs)):
+                operation = ''.join('{:02x}'.format(x) for x in receipt.logs[j].topics[0])
+                operations.append(operation)
+                addresses.append(receipt.logs[j].address)
+
+            # Check if liquidity was added to the pool:
+            if  addresses[0] == '0x8a854288a5976036A725879164Ca3e91d30c6A1B' and \
+                operations[0] == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' and \
+                addresses[1] == '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' and \
+                operations[1] == 'e1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c' and \
+                addresses[2] == '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' and \
+                operations[2] == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef':
+                # Ammount of GET added
+                hexdata_string = receipt.logs[0].data[2:]
+                data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
+                get_value = data[3]*10.**-18 + data[2]*2**64*10**-18
+                # Ammount of ETH added
+                hexdata_string = receipt.logs[1].data[2:]
+                data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
+                weth_value = data[3]*10.**-18 + data[2]*2**64*10**-18
+                # Send message to Telegram bot
+                msg_text = 'Added liquidity: ' + str(get_value) + ' GET | ' + str(weth_value) + ' ETH'
+                bot.send_message(chat_id=-466074155, text=msg_text)
+                time.sleep(1)
+            # Check if GET was sold to the pool
+            elif  addresses[0] == '0x8a854288a5976036A725879164Ca3e91d30c6A1B' and \
+                operations[0] == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' and \
+                addresses[1] == '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' and \
+                operations[1] == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' and \
+                addresses[2] == '0x2680a95FC9De215F1034F073185CC1F2a28B4107' and \
+                operations[2] == '1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1':
+                # Ammount of GET added
+                hexdata_string = receipt.logs[0].data[2:]
+                data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
+                get_value = data[3]*10.**-18 + data[2]*2**64*10**-18
+                # Ammount of ETH removed
+                hexdata_string = receipt.logs[1].data[2:]
+                data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
+                weth_value = data[3]*10.**-18 + data[2]*2**64*10**-18
+                # Send message to Telegram bot
+                msg_text = 'Sold GET: ' + str(get_value) + ' GET | ' + str(weth_value) + ' ETH'
+                bot.send_message(chat_id=-466074155, text=msg_text)
+                time.sleep(1)
+            # Check if GET was bought from the pool:
+            elif addresses[0] == '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' and \
+                operations[0] == 'e1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c' and \
+                addresses[1] == '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' and \
+                operations[1] == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' and \
+                addresses[2] == '0x8a854288a5976036A725879164Ca3e91d30c6A1B' and \
+                operations[2] == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef':
+                # Ammount of GET removed
+                hexdata_string = receipt.logs[2].data[2:]
+                data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
+                get_value = data[3]*10.**-18 + data[2]*2**64*10**-18
+                # Ammount of ETH added
+                hexdata_string = receipt.logs[1].data[2:]
+                data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
+                weth_value = data[3]*10.**-18 + data[2]*2**64*10**-18
+                # Send message to Telegram bot
+                msg_text = 'Bought GET: ' + str(get_value) + ' GET | ' + str(weth_value) + ' ETH'
+                bot.send_message(chat_id=-466074155, text=msg_text)
+                time.sleep(1)
+            # Check if liquidity was removed from the pool:
+            elif addresses[0] == '0x2680a95FC9De215F1034F073185CC1F2a28B4107' and \
+                operations[0] == '8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925' and \
+                addresses[1] == '0x2680a95FC9De215F1034F073185CC1F2a28B4107' and \
+                operations[1] == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' and \
+                addresses[2] == '0x2680a95FC9De215F1034F073185CC1F2a28B4107' and \
+                operations[2] == 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef':
+                # Ammount of GET removed
+                hexdata_string = receipt.logs[3].data[2:]
+                data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
+                get_value = data[3]*10.**-18 + data[2]*2**64*10**-18
+                # Ammount of ETH removed
+                hexdata_string = receipt.logs[4].data[2:]
+                data = struct.unpack('!QQQQ',bytes.fromhex(hexdata_string))
+                weth_value = data[3]*10.**-18 + data[2]*2**64*10**-18
+                # Send message to Telegram bot
+                msg_text = 'Removed liquidity: ' + str(get_value) + ' GET | ' + str(weth_value) + ' ETH'
+                # TODO because the transaction is somehow handled twice it is also send twice...
+                bot.send_message(chat_id=-466074155, text=msg_text)
+                time.sleep(1)
+            else:
+                print('\nUNKOWN TRANSACTION?\n\n')
+                print(receipt)
+                print('\n\n')
 
             if not (block_number in new_handled_blocks):
                 new_handled_blocks.append(block_number)
