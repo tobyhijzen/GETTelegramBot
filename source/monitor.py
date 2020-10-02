@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 
 # Telegram setup
-token = '1366223946:AAEABFGgJOrSjrrZm4i0CAD5Y0O5BKqGLdQ'
+import os
+
+token = os.environ['TELEGRAM_GET_COMMUNITY_TOKEN']
 
 import time
 import struct
@@ -51,13 +53,14 @@ get_weth_checksum_address = w3.toChecksumAddress('0x8a854288a5976036a725879164ca
 
 GET_WETH_PAIR_CONTRACT = w3.eth.contract(address=get_weth_checksum_address, abi=GET_WETH_PAIR_FACTORY_ABI)
 
-# block = "latest"
+block = "latest"
 # block = 10955000
-block = 10954000
+# block = 10954000
 
 myfilter = GET_WETH_PAIR_CONTRACT.events.Transfer.createFilter(fromBlock=block)
 
 handled_blocks = []
+handled_transactions = []
 
 connected = True
 
@@ -88,6 +91,10 @@ while True:
         if not (block_number in handled_blocks):
             print('\nblock nr:',block_number)
             tx_hash = transactions[i]['transactionHash']
+            if not (tx_hash in handled_transactions):
+                handled_transactions.append(tx_hash)
+            else:
+                continue
             print('Transaction hash: 0x' + ''.join('{:02x}'.format(x) for x in tx_hash))
             receipt = w3.eth.getTransactionReceipt(tx_hash)
             from_address = receipt['from']
