@@ -62,14 +62,14 @@ myfilter = GET_WETH_PAIR_CONTRACT.events.Transfer.createFilter(fromBlock=block)
 handled_blocks = []
 handled_transactions = []
 
-connected = True
+connected = False
 
 print('Monitoring transactions')
 
 while True:
     # Try to connect tot infura node and get logs
     try:
-        transactions = w3.eth.getFilterLogs(myfilter.filter_id)
+        transactions = w3.eth.getFilterChanges(myfilter.filter_id)
     except:
         if connected:
             t = datetime.datetime.now()
@@ -198,4 +198,5 @@ while True:
             if not (block_number in new_handled_blocks):
                 new_handled_blocks.append(block_number)
     handled_blocks += new_handled_blocks
+    print("loop")
     time.sleep(60)
